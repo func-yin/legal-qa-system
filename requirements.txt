@@ -1,0 +1,12 @@
+# 后端
+Flask==3.1.3
+neo4j==6.2.0
+# 模型
+torch==2.13.0
+transformers==5.14.1
+# 数据处理与评估
+numpy==2.5.1
+pandas==3.0.3
+scikit-learn==1.9.0
+# 测试
+pytest==9.1.1
