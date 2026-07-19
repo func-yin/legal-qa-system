@@ -26,6 +26,8 @@ class FakeIntentService:
              ("第", "article_query"), ("你好", "greeting"), ("谢谢", "thanks_bye")]
 
     def predict(self, text):
+        if text == "它量刑如何":
+            return "sentencing", 0.4  # 模拟低置信度场景
         for kw, intent in self.RULES:
             if kw in text:
                 return intent, 0.95
@@ -92,6 +94,20 @@ def test_session_isolation(dm):
 def test_fallback_on_low_confidence(dm):
     r = dm.reply("今天天气怎么样")
     assert "理解不了" in r["answer"]
+
+
+def test_context_rescue_on_low_confidence(dm):
+    """低置信度 + 有上下文槽位 -> 上下文兜底回答，而不是拒识"""
+    sid = dm.reply("什么是盗窃罪")["session_id"]
+    r = dm.reply("它量刑如何", sid)  # FakeIntentService 返回 (sentencing, 0.4)
+    assert "盗窃罪" in r["answer"] and "3年以下" in r["answer"]
+
+
+def test_keyword_rescue_on_pronoun_turn(dm):
+    """模型完全跑偏（greeting 0.19）+ 指代词 -> 关键词纠偏意图"""
+    sid = dm.reply("什么是盗窃罪")["session_id"]
+    r = dm.reply("它的构成要件呢", sid)  # Fake 返回 (greeting, 0.3)
+    assert "盗窃罪" in r["answer"] and "客体" in r["answer"]
 
 
 @pytest.mark.parametrize("raw,expect", [

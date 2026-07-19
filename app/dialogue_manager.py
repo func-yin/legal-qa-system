@@ -85,15 +85,34 @@ class DialogueManager:
         # 上一轮在等实体补齐：优先消费 pending 状态
         if sess.pending_intent:
             answer = self._fulfill_pending(sess, text)
-        elif conf < INTENT_CONFIDENCE_THRESHOLD:
-            answer = FALLBACK
-        else:
+        elif conf >= INTENT_CONFIDENCE_THRESHOLD:
             answer = self._dispatch(sess, intent, text)
+        elif sess.slots.get("crime"):
+            # 上下文兜底：上下文已有罪名槽位时，短输入（如「那会判几年」）
+            # 模型置信度常偏低；先按模型意图，再按关键词推断续聊意图，
+            # 结合上下文回答而不是机械拒识 —— 拒识与多轮体验的平衡（面试讲点）
+            rescued = self._rescue_intent(intent, text)
+            answer = self._dispatch(sess, rescued, text) if rescued else FALLBACK
+        else:
+            answer = FALLBACK
 
         sess.history.append({"user": text, "bot": answer, "intent": intent,
                              "confidence": round(conf, 4)})
         return {"session_id": session_id, "intent": intent,
                 "confidence": round(conf, 4), "answer": answer}
+
+    @staticmethod
+    def _rescue_intent(intent, text):
+        """低置信度续聊的意图纠偏：模型意图有效直接用，否则按关键词推断"""
+        if intent in CRIME_INTENTS:
+            return intent
+        if any(k in text for k in ["要件", "构成", "认定", "立案标准"]):
+            return "crime_elements"
+        if any(k in text for k in ["判", "量刑", "坐牢", "刑期", "缓刑"]):
+            return "sentencing"
+        if any(k in text for k in ["是什么", "定义", "什么意思", "概念"]):
+            return "crime_definition"
+        return None
 
     # ---------------- 意图分发 ----------------
     def _dispatch(self, sess, intent, text):
